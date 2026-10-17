@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -40,6 +38,11 @@ services:
     container_name: harness-kafka
     ports:
       - "${KAFKA_PORT:-9092}:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:29092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
@@ -69,6 +72,114 @@ services:
       JVM_OPTS: "-Xms32M -Xmx64M"
     depends_on:
       - kafka
+
+  backend:
+    build: ./backend
+    container_name: harness-backend
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    environment:
+      HTTP_ADDR: ":8080"
+      API_BASE_PATH: ${API_BASE_PATH:-/v1}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-agent-harness-metrics}
+      KAFKA_GROUP_ID: ${KAFKA_GROUP_ID:-agent-metrics-analyzer}
+      KAFKA_START_OFFSET: ${KAFKA_START_OFFSET:-last}
+      KAFKA_FETCH_MIN_BYTES: ${KAFKA_FETCH_MIN_BYTES:-1024}
+      KAFKA_FETCH_MAX_BYTES: ${KAFKA_FETCH_MAX_BYTES:-52428800}
+      KAFKA_MAX_WAIT_MS: ${KAFKA_MAX_WAIT_MS:-500}
+      KAFKA_SESSION_TIMEOUT_MS: ${KAFKA_SESSION_TIMEOUT_MS:-30000}
+      KAFKA_HEARTBEAT_INTERVAL_MS: ${KAFKA_HEARTBEAT_INTERVAL_MS:-10000}
+      POSTGRES_URL: postgres://${POSTGRES_USER:-harness_user}:${POSTGRES_PASSWORD:-harness_password}@postgres:5432/${POSTGRES_DB:-harness_db}?sslmode=disable
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-harness_password}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_PATH: ${API_BASE_PATH:-/v1}
+    container_name: harness-frontend
+    ports:
+      - "${WEB_PORT:-8081}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  producer:
+    build: ./backend
+    container_name: harness-producer
+    profiles: ["producer"]
+    entrypoint: ["./producer"]
+    environment:
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-agent-harness-metrics}
+      KAFKA_ACKS: ${KAFKA_ACKS:-all}
+      KAFKA_COMPRESSION: ${KAFKA_COMPRESSION:-snappy}
+      KAFKA_BATCH_SIZE: ${KAFKA_BATCH_SIZE:-16384}
+      KAFKA_LINGER_MS: ${KAFKA_LINGER_MS:-10}
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  backend-dev:
+    build: ./backend
+    container_name: harness-backend-dev
+    profiles: ["dev"]
+    entrypoint: ["sh", "-c", "go run ./cmd/server"]
+    working_dir: /src
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    environment:
+      HTTP_ADDR: ":8080"
+      API_BASE_PATH: ${API_BASE_PATH:-/v1}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-agent-harness-metrics}
+      KAFKA_GROUP_ID: ${KAFKA_GROUP_ID:-agent-metrics-analyzer}
+      KAFKA_START_OFFSET: ${KAFKA_START_OFFSET:-last}
+      POSTGRES_URL: postgres://${POSTGRES_USER:-harness_user}:${POSTGRES_PASSWORD:-harness_password}@postgres:5432/${POSTGRES_DB:-harness_db}?sslmode=disable
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-harness_password}
+    volumes:
+      - ./backend:/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: harness-frontend-dev
+    profiles: ["dev"]
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_PROXY_TARGET: http://backend-dev:8080
+      VITE_API_BASE_PATH: ${API_BASE_PATH:-/v1}
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
 
 volumes:
   pgdata:

@@ -20,9 +20,21 @@
 - `frontend/` — клиентская часть (React)
 - `tests/` — e2e-тесты (Playwright): полный прогон Kafka → backend → API → UI
 - `docs/` — документация проекта
-- `docker-compose.yml` — локальная инфраструктура (PostgreSQL, Neo4j, Kafka, Kafdrop)
+- `docker-compose.yml` — инфраструктура (PostgreSQL, Neo4j, Kafka, Kafdrop) + приложения (backend, frontend)
 
 ## Быстрый старт
+
+### Всё в Docker (рекомендуется)
+
+1. Создать локальный файл окружения: `cp .env.example .env`
+2. Поднять весь стек: `make up` — инфраструктура + backend (Go) + frontend (nginx)
+   - UI: http://localhost:8081 (порт задаётся `WEB_PORT`), API: http://localhost:8080
+3. Отправить демо-сообщения в Kafka: `make up-producer`
+4. Остановить: `make down`
+
+Dev-режим с hot-reload (backend — `go run` с mount исходников, frontend — vite): `make up-dev` (UI на http://localhost:5173).
+
+### Локально на хосте
 
 1. Создать локальный файл окружения: `cp .env.example .env` (все глобальные константы: порты, эндпоинты, топики, креды, настройки Kafka)
 2. Запустить инфраструктуру: `make infra-up` (см. [Инфраструктуру](./docs/infrastructure.md))

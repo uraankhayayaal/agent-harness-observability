@@ -1,4 +1,4 @@
-.PHONY: infra-up infra-down backend producer frontend build test env e2e-install e2e
+.PHONY: infra-up infra-down backend producer frontend build test env e2e-install e2e up down up-dev up-producer producer-docker
 
 env:
 	@test -f .env || cp .env.example .env
@@ -11,6 +11,21 @@ infra-up: env
 
 infra-down: env
 	docker compose down -v
+
+# Полный стек в Docker: infra + backend + frontend (nginx)
+up: env
+	docker compose up -d --build --wait
+
+down: env
+	docker compose down
+
+# Dev-режим: infra + backend (go run, mount исходников) + frontend (vite, hot-reload)
+up-dev: env
+	docker compose --profile dev up -d --build --wait
+
+# Демо-producer в Kafka (одноразовый генератор сообщений)
+up-producer: env
+	docker compose --profile producer up --build producer
 
 backend: env
 	go -C backend run ./cmd/server
