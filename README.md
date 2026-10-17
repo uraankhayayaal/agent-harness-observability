@@ -51,3 +51,13 @@ Dev-режим с hot-reload (backend — `go run` с mount исходников
   make e2e             # прогон (backend/frontend поднимутся автоматически)
   ```
   Скриншот визуализации сохраняется в `tests/test-results/`.
+
+## CI/CD
+
+GitHub Actions (`.github/workflows/docker.yml`) собирает образы `backend` и `frontend`:
+на pull request — только сборка (проверка), на push в `main` — сборка и публикация в GHCR с тегами `latest` и `sha-<short>`:
+
+```
+ghcr.io/uraankhayayaal/agent-harness-observability/backend:latest
+ghcr.io/uraankhayayaal/agent-harness-observability/frontend:latest
+```
