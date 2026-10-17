@@ -27,9 +27,9 @@ func NewHandler(queries *usecase.TrajectoryQuery, log *slog.Logger) *Handler {
 	return &Handler{queries: queries, log: log}
 }
 
-func (h *Handler) Routes() http.Handler {
+func (h *Handler) Routes(basePath string) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /v1/runs/{run_id}/trajectory", h.getTrajectory)
+	mux.HandleFunc("GET "+basePath+"/runs/{run_id}/trajectory", h.getTrajectory)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})

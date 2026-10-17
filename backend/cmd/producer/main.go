@@ -7,12 +7,57 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/segmentio/kafka-go"
 
 	"github.com/uraankhayayaal/agent-harness-observability/backend/internal/domain"
 )
+
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func envOrInt(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return fallback
+}
+
+func requiredAcks(s string) kafka.RequiredAcks {
+	switch s {
+	case "none":
+		return kafka.RequireNone
+	case "one":
+		return kafka.RequireOne
+	default:
+		return kafka.RequireAll
+	}
+}
+
+func compression(s string) kafka.Compression {
+	switch s {
+	case "gzip":
+		return kafka.Gzip
+	case "snappy":
+		return kafka.Snappy
+	case "lz4":
+		return kafka.Lz4
+	case "zstd":
+		return kafka.Zstd
+	default:
+		return 0
+	}
+}
 
 type demoTool struct {
 	name    string
@@ -21,8 +66,8 @@ type demoTool struct {
 }
 
 func main() {
-	brokers := flag.String("brokers", "localhost:9092", "comma-separated kafka brokers")
-	topic := flag.String("topic", "agent-harness-metrics", "kafka topic")
+	brokers := flag.String("brokers", envOr("KAFKA_BROKERS", "localhost:9092"), "comma-separated kafka brokers")
+	topic := flag.String("topic", envOr("KAFKA_TOPIC", "agent-harness-metrics"), "kafka topic")
 	runID := flag.String("run-id", "", "run id (uuid), generated if empty")
 	steps := flag.Int("steps", 10, "number of steps to produce")
 	flag.Parse()
@@ -33,9 +78,13 @@ func main() {
 	}
 
 	writer := &kafka.Writer{
-		Addr:     kafka.TCP(strings.Split(*brokers, ",")...),
-		Topic:    *topic,
-		Balancer: &kafka.Hash{},
+		Addr:         kafka.TCP(strings.Split(*brokers, ",")...),
+		Topic:        *topic,
+		Balancer:     &kafka.Hash{},
+		RequiredAcks: requiredAcks(envOr("KAFKA_ACKS", "all")),
+		Compression:  compression(envOr("KAFKA_COMPRESSION", "snappy")),
+		BatchSize:    envOrInt("KAFKA_BATCH_SIZE", 16384),
+		BatchTimeout: time.Duration(envOrInt("KAFKA_LINGER_MS", 10)) * time.Millisecond,
 	}
 	defer writer.Close()
 

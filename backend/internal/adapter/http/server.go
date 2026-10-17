@@ -15,12 +15,12 @@ type Server struct {
 	log  *slog.Logger
 }
 
-func NewServer(addr string, queries *usecase.TrajectoryQuery, log *slog.Logger) *Server {
+func NewServer(addr, basePath string, queries *usecase.TrajectoryQuery, log *slog.Logger) *Server {
 	h := NewHandler(queries, log)
 	return &Server{
 		http: &http.Server{
 			Addr:              addr,
-			Handler:           h.Routes(),
+			Handler:           h.Routes(basePath),
 			ReadHeaderTimeout: 5 * time.Second,
 		},
 		log: log,

@@ -32,15 +32,36 @@ type Consumer struct {
 	log       *slog.Logger
 }
 
-func NewConsumer(brokers []string, topic, groupID string, processor StepProcessor, log *slog.Logger) *Consumer {
+type ConsumerConfig struct {
+	Brokers           []string
+	Topic             string
+	GroupID           string
+	StartOffset       string
+	MinBytes          int
+	MaxBytes          int
+	MaxWait           time.Duration
+	SessionTimeout    time.Duration
+	HeartbeatInterval time.Duration
+}
+
+func NewConsumer(cfg ConsumerConfig, processor StepProcessor, log *slog.Logger) *Consumer {
+	startOffset := kafka.LastOffset
+	if cfg.StartOffset == "first" {
+		startOffset = kafka.FirstOffset
+	}
 	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:        brokers,
-		GroupID:        groupID,
-		Topic:          topic,
-		StartOffset:    kafka.LastOffset,
-		CommitInterval: 0, // manual synchronous commit: At-Least-Once
-		Logger:         slogLogger{log: log},
-		ErrorLogger:    slogLogger{log: log},
+		Brokers:           cfg.Brokers,
+		GroupID:           cfg.GroupID,
+		Topic:             cfg.Topic,
+		StartOffset:       startOffset,
+		CommitInterval:    0, // manual synchronous commit: At-Least-Once
+		MinBytes:          cfg.MinBytes,
+		MaxBytes:          cfg.MaxBytes,
+		MaxWait:           cfg.MaxWait,
+		SessionTimeout:    cfg.SessionTimeout,
+		HeartbeatInterval: cfg.HeartbeatInterval,
+		Logger:            slogLogger{log: log},
+		ErrorLogger:       slogLogger{log: log},
 	})
 	return &Consumer{reader: reader, processor: processor, log: log}
 }

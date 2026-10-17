@@ -61,7 +61,17 @@ func run(log *slog.Logger) error {
 	processor := usecase.NewStepProcessor(pgRepo, graphRepo)
 	queries := usecase.NewTrajectoryQuery(graphRepo)
 
-	consumer := kafkaadapter.NewConsumer(cfg.KafkaBrokers, cfg.KafkaTopic, cfg.KafkaGroupID, processor, log)
+	consumer := kafkaadapter.NewConsumer(kafkaadapter.ConsumerConfig{
+		Brokers:           cfg.KafkaBrokers,
+		Topic:             cfg.KafkaTopic,
+		GroupID:           cfg.KafkaGroupID,
+		StartOffset:       cfg.KafkaStartOffset,
+		MinBytes:          cfg.KafkaFetchMinBytes,
+		MaxBytes:          cfg.KafkaFetchMaxBytes,
+		MaxWait:           cfg.KafkaMaxWait,
+		SessionTimeout:    cfg.KafkaSessionTimeout,
+		HeartbeatInterval: cfg.KafkaHeartbeatInterval,
+	}, processor, log)
 	defer func() {
 		if err := consumer.Close(); err != nil {
 			log.Error("close kafka consumer", "error", err)
@@ -75,7 +85,7 @@ func run(log *slog.Logger) error {
 		}
 	}()
 
-	srv := httpapi.NewServer(cfg.HTTPAddr, queries, log)
+	srv := httpapi.NewServer(cfg.HTTPAddr, cfg.APIBasePath, queries, log)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil {
 			errCh <- err
